@@ -1,16 +1,31 @@
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from .forms import ContactMeForm
 
 from django.conf import settings 
 from django.template.loader import get_template  
-from django.core.mail import EmailMessage 
+from django.core.mail import EmailMultiAlternatives 
+from weasyprint import HTML     
+import weasyprint
 
-def sendmail_contact(data):
-    message_body = get_template('send.html').render(data)  
-    email = EmailMessage(data['subject'],
-                            message_body, settings.DEFAULT_FROM_EMAIL,
-                            to=['leticialimacgi@gmail.com'])
-    email.content_subtype = "html"    
+
+def sendmail_contact_to_pdf(data):
+    body = 'Mensagem de texto' # opcional no lugar de html_body
+    
+    html_body = get_template('send.html').render(data) 
+    
+    # html para pdf
+    response = HttpResponse(content_type='application/pdf')
+    pdf = html_body.format(**data)
+    
+    response['Content-Disposition'] = 'filename=certificate_{}'.format(data['name']) + '.pdf'
+    pdf = weasyprint.HTML(string=pdf, base_url='http://127.0.0.1:8000/media').write_pdf(stylesheets=[weasyprint.CSS(string='body { font-family: serif}')]) 
+    
+    email = EmailMultiAlternatives(data['subject'], html_body, settings.DEFAULT_FROM_EMAIL, to=['leticialimacgi@gmail.com'])
+    email.attach("emailpdf_{}".format(data['name']) + '.pdf', pdf, "application/pdf")
+    email.attach_alternative(html_body, "text/html")
+    email.content_subtype = "pdf"  
+    email.decode = 'us-ascii'
     return email.send()
 
 # Create your views here.
@@ -28,7 +43,7 @@ def contact_me(request):
                 'subject': request.POST.get('subject'),
                 'message': request.POST.get('message'),
             } 
-            sendmail_contact(data) # Aqui vou criar uma função para envio
+            sendmail_contact_to_pdf(data) # Aqui vou criar uma função para envio
             # chamei de sendmail_contact
 
             return redirect('contact')
